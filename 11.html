@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>智能二维码图片生成器 (最终高清版)</title>
+    <style>
+        /* CSS样式与您确认的版本完全相同 */
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; background-color: #f4f4f4; margin: 20px 0; padding: 0 20px; gap: 24px; flex-wrap: wrap; }
+        .main-content { flex: 1; max-width: 800px; min-width: 420px; }
+        .history-panel { width: 300px; flex-shrink: 0; }
+        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .input-group { margin-bottom: 15px; }
+        .input-group textarea { width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+        button { border: none; border-radius: 4px; cursor: pointer; transition: background-color 0.2s; }
+        #output { margin-top: 20px; text-align: center; }
+        canvas { border: 1px solid #ccc; max-width: 100%; height: auto; }
+        .actions-group { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+        .input-actions button { font-size: 12px; padding: 6px 10px; background-color: #6c757d; color: white; }
+        .input-actions button:hover { background-color: #5a6268; }
+        .main-actions-container { justify-content: flex-start; margin-top: 20px; }
+        .main-actions-container button { padding: 10px 15px; font-size: 14px; color: white; }
+        .main-actions-container .generate-btn { background-color: #007bff; }
+        .main-actions-container .generate-btn:hover { background-color: #0056b3; }
+        .main-actions-container .copy-btn { background-color: #28a745; }
+        .main-actions-container .copy-btn:hover { background-color: #218838; }
+        .main-actions-container .download-btn { background-color: #17a2b8; }
+        .main-actions-container .download-btn:hover { background-color: #138496; }
+        .main-actions-container .share-btn { background-color: #ffc107; color: black; }
+        .main-actions-container .share-btn:hover { background-color: #e0a800; }
+        #history-list { list-style-type: decimal; padding-left: 20px; margin: 0; max-height: 600px; overflow-y: auto; }
+        #history-list li { padding: 8px; cursor: pointer; border-radius: 4px; word-break: break-all; }
+        #history-list li:hover { background-color: #f0f0f0; }
+        .history-panel h2 { margin-top: 0; }
+        .history-panel .clear-history-btn { background-color: #dc3545; color: white; margin-top: 10px; padding: 8px 12px; }
+        .history-panel .clear-history-btn:hover { background-color: #c82333;}
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
+</head>
+<body>
+
+    <div class="main-content">
+        <div class="container">
+            <div class="input-group">
+                <textarea id="qr-data" rows="3" oninput="parseLink()" placeholder="1. 在此粘贴 vmess / socks 链接或JSON数据..."></textarea>
+                <div class="actions-group input-actions">
+                    <button onclick="pasteFromClipboard()">一键粘贴</button>
+                    <button onclick="clearInput()">一键清除</button>
+                </div>
+            </div>
+            <div class="input-group">
+                <textarea id="top-text" rows="3" placeholder="2. 在此编辑图片顶部文字..."></textarea>
+            </div>
+            <div class="actions-group main-actions-container">
+                <button class="generate-btn" onclick="generateImage()">生成图片</button>
+                <button class="copy-btn" id="copy-button" onclick="copyImage()" style="display: none;">复制图片</button>
+                <button class="download-btn" id="download-button" onclick="downloadImage()" style="display: none;">下载图片</button>
+                <button class="share-btn" id="share-button" onclick="shareImage()" style="display: none;">分享图片</button>
+            </div>
+            <div id="output">
+                <canvas id="canvas"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="history-panel container">
+        <h2>历史记录</h2>
+        <ol id="history-list"></ol>
+        <button class="clear-history-btn" onclick="clearHistory()">清空所有历史记录</button>
+    </div>
+
+    <script>
+        let parsedLinkData = null;
+        const HISTORY_KEY = 'qrGeneratorHistory_v14';
+
+        // ... (所有辅助函数与之前版本完全相同，此处省略)
+        async function pasteFromClipboard() { try { const text = await navigator.clipboard.readText(); document.getElementById('qr-data').value = text; parseLink(); } catch (err) { alert('粘贴失败！'); } }
+        function clearInput() { document.getElementById('qr-data').value = ''; document.getElementById('top-text').value = ''; parsedLinkData = null; }
+        function copyImage() { const canvas = document.getElementById('canvas'); canvas.toBlob(function(blob) { try { navigator.clipboard.write([ new ClipboardItem({ 'image/png': blob }) ]); alert('图片已成功复制到剪贴板！'); } catch (error) { alert('复制失败！'); } }, 'image/png'); }
+        function downloadImage() { const canvas = document.getElementById('canvas'); const link = document.createElement('a'); link.download = '二维码.png'; link.href = canvas.toDataURL('image/png'); link.click(); }
+        async function shareImage() { const canvas = document.getElementById('canvas'); const topText = document.getElementById('top-text').value.replace(/\n/g, ' ') || '二维码图片'; canvas.toBlob(async (blob) => { const file = new File([blob], '二维码.png', { type: 'image/png' }); const shareData = { title: '分享二维码', text: topText, files: [file] }; try { await navigator.share(shareData); } catch (error) { if (error.name !== 'AbortError') { alert('分享失败'); } } }, 'image/png'); }
+        function saveToHistory(entry) { let history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; if (history.length > 0 && JSON.stringify(history[0].data) === JSON.stringify(entry.data) && JSON.stringify(history[0].settings) === JSON.stringify(entry.settings)) return; history.unshift(entry); if (history.length > 50) history = history.slice(0, 50); localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); renderHistory(); }
+        function renderHistory() { const history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; const listElement = document.getElementById('history-list'); listElement.innerHTML = ''; history.forEach((entry, index) => { const title = entry.data.topText.replace(/\n/g, ' ') || entry.data.originalLink || '[无标题]'; li = document.createElement('li'); li.textContent = title; li.title = `点击恢复: ${title}`; li.onclick = () => loadFromHistory(index); listElement.appendChild(li); }); }
+        function loadFromHistory(index) { const history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; if (history[index]) { const entry = history[index]; document.getElementById('qr-data').value = entry.data.originalLink; document.getElementById('top-text').value = entry.data.topText; parseLink(); generateImage(entry.settings); } }
+        function clearHistory() { if (confirm('确定清空所有记录吗？')) { localStorage.removeItem(HISTORY_KEY); renderHistory(); } }
+        function parseLink() { const link = document.getElementById('qr-data').value.trim(); const topTextInput = document.getElementById('top-text'); parsedLinkData = null; try { if (link.startsWith('[') && link.endsWith(']')) { const data = JSON.parse(link)[0]; parsedLinkData = { protocol: 'socks', username: data.username || '', password: data.password || '', server: data.target, port: data.port, remark: `${data.countryName}-${data.ip}` }; } else if (link.startsWith('vmess://')) { const base64String = link.substring(8); const config = JSON.parse(atob(base64String)); parsedLinkData = { protocol: 'vmess', config: config, remark: config.ps || '' }; } else if (link.startsWith('socks://')) { let remaining = link.substring(8); let remark = '', username = '', password = '', server = '', port = ''; const hashIndex = remaining.indexOf('#'); if (hashIndex !== -1) { remark = decodeURIComponent(remaining.substring(hashIndex + 1)); remaining = remaining.substring(0, hashIndex); } const atIndex = remaining.indexOf('@'); if (atIndex !== -1) { let authPart = remaining.substring(0, atIndex); const serverPart = remaining.substring(atIndex + 1); try { const authDecoded = atob(authPart); const authParts = authDecoded.split(':'); username = authParts[0] || ''; password = authParts[1] || ''; } catch(e) { const authParts = authPart.split(':'); username = authParts[0] || ''; password = authParts[1] || ''; } const serverParts = serverPart.split(':'); server = serverParts[0]; port = serverParts[1]; } else { const serverParts = remaining.split(':'); server = serverParts[0]; port = serverParts[1]; } parsedLinkData = { protocol: 'socks', username, password, server, port, remark }; } if (parsedLinkData && parsedLinkData.remark) { const now = new Date(); const pad = (num) => num.toString().padStart(2, '0'); const month = pad(now.getMonth() + 1); const day = pad(now.getDate()); const dateString = `${month}月${day}日`; topTextInput.value = `-${dateString}\n${parsedLinkData.remark}`; } else { topTextInput.value = (parsedLinkData ? parsedLinkData.remark : ''); } } catch (e) { console.error("链接或数据解析失败:", e); parsedLinkData = null; topTextInput.value = ''; } }
+        
+        // --- 核心生成函数 (已集成高清立体样式) ---
+        function generateImage(settingsOverride) {
+            // ====================================================================================================
+            // ===                                【最终样式与布局控制中心】                                    ===
+            // ====================================================================================================
+            const settings = settingsOverride || {
+                // --- 1. 高清与尺寸控制 ---
+                scaleFactor: 15,                   // 【清晰度】倍率，数值越大图片越清晰，建议2-3。
+                canvasWidth: 380,                 // 图片的【显示宽度】。
+                canvasHeight: 500,                // 图片的【显示高度】。
+
+                // --- 2. 立体与背景控制 ---
+                cardPadding: 9,                  // 白色卡片离图片边缘的【边距】。
+                cardBackgroundColor: '#FFFFFF',   // 中间白色【卡片的颜色】。
+                canvasBackgroundColor: '#F0F2F5', // 最外层【背景的颜色】。
+                shadowOffsetX: 4,                   // 【阴影】的水平偏移。
+                shadowOffsetY: 4,                   // 【阴影】的垂直偏移。
+                shadowColor: 'rgba(0,0,0,0.1)',   // 【阴影】的颜色。
+                shadowBlur: 14,                     // 【阴影】的模糊程度。
+                
+                // --- 3. 文字样式控制 ---
+                topTextSize: 28,                  // 【顶部文字】的字体大小。
+                topTextColor: '#FF0000',          // 【顶部文字】的字体颜色。
+                dateTimeTextSize: 13,             // 【下方日期】的字体大小。
+                dateTimeTextColor: '#ff7575',     // 【下方日期】的字体颜色。
+                
+                // --- 4. 智能布局控制 (一般无需修改) ---
+                contentVerticalOffset: 15,         // 【整体内容】的垂直偏移量。
+                topTextVerticalOffset: 17,         // 【顶部文字】的相对垂直微调。
+                dateTimeVerticalOffset: -20 ,     // 【下方日期】的相对垂直微调。
+            };
+            // ====================================================================================================
+            
+            const originalLink = document.getElementById('qr-data').value;
+            const topTextFromUser = document.getElementById('top-text').value;
+            let finalQrData;
+
+            if (parsedLinkData) {
+                const newRemark = topTextFromUser;
+                try {
+                    switch (parsedLinkData.protocol) {
+                        case 'vmess':
+                            parsedLinkData.config.ps = newRemark;
+                            finalQrData = 'vmess://' + btoa(unescape(encodeURIComponent(JSON.stringify(parsedLinkData.config))));
+                            break;
+                        case 'socks':
+                            const sourceDomain = 'proxy.quanqiudaili.com';
+                            const replacementDomain = 'aa.tiktoka.cloud';
+                            let finalServer = parsedLinkData.server;
+                            if (finalServer === sourceDomain) { finalServer = replacementDomain; }
+                            let authPart = '';
+                            if (parsedLinkData.username || parsedLinkData.password) {
+                                const authString = `${parsedLinkData.username}:${parsedLinkData.password}`;
+                                authPart = btoa(authString) + '@';
+                            }
+                            const serverPart = `${finalServer}:${parsedLinkData.port}`;
+                            const remarkPart = newRemark ? `#${encodeURIComponent(newRemark)}` : '';
+                            finalQrData = `socks://${authPart}${serverPart}${remarkPart}`;
+                            break;
+                    }
+                } catch(e) { alert('生成失败：无法重新编码链接。'); return; }
+            } else { finalQrData = originalLink; }
+            
+            const canvas = document.getElementById('canvas'); const ctx = canvas.getContext('2d');
+            canvas.width = settings.canvasWidth * settings.scaleFactor; canvas.height = settings.canvasHeight * settings.scaleFactor;
+            canvas.style.width = settings.canvasWidth + 'px'; canvas.style.height = settings.canvasHeight + 'px';
+            ctx.scale(settings.scaleFactor, settings.scaleFactor);
+
+            ctx.fillStyle = settings.canvasBackgroundColor; ctx.fillRect(0, 0, settings.canvasWidth, settings.canvasHeight);
+            const cardX = settings.cardPadding; const cardY = settings.cardPadding; const cardWidth = settings.canvasWidth - settings.cardPadding * 2; const cardHeight = settings.canvasHeight - settings.cardPadding * 2;
+            ctx.shadowColor = settings.shadowColor; ctx.shadowBlur = settings.shadowBlur; ctx.shadowOffsetX = settings.shadowOffsetX; ctx.shadowOffsetY = settings.shadowOffsetY;
+            ctx.fillStyle = settings.cardBackgroundColor; ctx.fillRect(cardX, cardY, cardWidth, cardHeight);
+            ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+            const qrBoxSize = cardWidth - 40;
+            const topLines = topTextFromUser.split('\n'); const topTextLineHeight = parseInt(settings.topTextSize, 10) * 1.2; const topTextBlockHeight = (topTextFromUser ? topLines.length : 0) * topTextLineHeight; const dateTimeLineHeight = parseInt(settings.dateTimeTextSize, 10) * 1.2; const dateTimeBlockHeight = dateTimeLineHeight; const spacingBetweenElements = 20;
+            let totalContentHeight = qrBoxSize;
+            if (topTextFromUser) { totalContentHeight += spacingBetweenElements + topTextBlockHeight; } totalContentHeight += spacingBetweenElements + dateTimeBlockHeight;
+            let contentGroupStartY = cardY + (cardHeight - totalContentHeight) / 2 + settings.contentVerticalOffset;
+            if (topTextFromUser) {
+                let currentY = contentGroupStartY + settings.topTextVerticalOffset;
+                ctx.fillStyle = settings.topTextColor; ctx.font = `bold ${settings.topTextSize}px 思源黑体, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                const textStartX = cardX + cardWidth / 2;
+                topLines.forEach((line, index) => { const yPos = currentY + (topTextLineHeight / 2) + (index * topTextLineHeight); ctx.fillText(line.trim(), textStartX, yPos); });
+            }
+            const qrStartY = contentGroupStartY + (topTextFromUser ? topTextBlockHeight + spacingBetweenElements : 0);
+            try {
+                const qr = qrcode(0, 'M'); qr.addData(finalQrData); qr.make();
+                const qrCanvas = document.createElement('canvas'); qrCanvas.width = qrCanvas.height = qrBoxSize;
+                const qrCtx = qrCanvas.getContext('2d');
+                qrCtx.fillStyle = '#ffffff'; qrCtx.fillRect(0, 0, qrBoxSize, qrBoxSize);
+                const moduleCount = qr.getModuleCount(); const marginModules = 3; const totalModules = moduleCount + marginModules * 2; const moduleSize = qrBoxSize / totalModules;
+                for (let row = 0; row < moduleCount; row++) { for (let col = 0; col < moduleCount; col++) { if (qr.isDark(row, col)) { qrCtx.fillStyle = '#000000'; const x = (col + marginModules) * moduleSize; const y = (row + marginModules) * moduleSize; qrCtx.fillRect(Math.round(x), Math.round(y), Math.ceil(moduleSize + 0.5), Math.ceil(moduleSize + 0.5)); } } }
+                ctx.drawImage(qrCanvas, cardX + (cardWidth - qrBoxSize) / 2, qrStartY, qrBoxSize, qrBoxSize);
+                document.getElementById('copy-button').style.display = 'inline-block'; document.getElementById('download-button').style.display = 'inline-block'; initializeShareButton(); 
+                if (!settingsOverride) { const historyEntry = { data: { originalLink: originalLink, topText: topTextFromUser }, settings: settings }; saveToHistory(historyEntry); }
+            } catch (e) { alert("生成失败！\n\n原因：您输入的文字太长，导致二维码容量超限。\n\n解决方法：请尝试缩短顶部文字。"); }
+            const now = new Date(); const pad = (num) => num.toString().padStart(2, '0');
+            const dateTimeString = `${now.getFullYear()}年${pad(now.getMonth() + 1)}月${pad(now.getDate())}日 ${pad(now.getHours())}点${pad(now.getMinutes())}分${pad(now.getSeconds())}秒`;
+            ctx.font = `bold ${settings.dateTimeTextSize}px 思源黑体, sans-serif`; 
+            ctx.fillStyle = settings.dateTimeTextColor; 
+            const dateTimeYPos = qrStartY + qrBoxSize + spacingBetweenElements + (dateTimeBlockHeight / 2) + settings.dateTimeVerticalOffset;
+            ctx.fillText(dateTimeString, cardX + cardWidth / 2, dateTimeYPos);
+        }
+
+        function initializeShareButton() { const shareButton = document.getElementById('share-button'); if (navigator.share && navigator.canShare) { const dummyFile = new File(["dummy"], "dummy.png", {type: "image/png"}); if (navigator.canShare({ files: [dummyFile] })) { shareButton.style.display = 'inline-block'; } else { shareButton.style.display = 'none'; } } else { shareButton.style.display = 'none'; } }
+        window.onload = function() { renderHistory(); initializeShareButton(); };
+
+    </script>
+</body>
+</html>
