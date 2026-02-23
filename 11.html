@@ -55,6 +55,7 @@
                 <button class="copy-btn" id="copy-button" onclick="copyImage()" style="display: none;">复制图片</button>
                 <button class="download-btn" id="download-button" onclick="downloadImage()" style="display: none;">下载图片</button>
                 <button class="share-btn" id="share-button" onclick="shareImage()" style="display: none;">分享图片</button>
+                <button style="background-color: #8a2be2;" onclick="navigator.clipboard.writeText(document.getElementById('top-text').value)">复制文字</button>
             </div>
             <div id="output">
                 <canvas id="canvas"></canvas>
