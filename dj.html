@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok 顶级自建节点 SOP (V1.0)</title>
+    <style>
+        :root {
+            --primary: #1e293b;
+            --secondary: #334155;
+            --accent: #2563eb;
+            --success: #059669;
+            --danger: #dc2626;
+            --bg: #f8fafc;
+            --code-bg: #0f172a;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; background-color: var(--bg); color: var(--primary); margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); }
+        h1 { text-align: center; color: var(--primary); border-bottom: 3px solid var(--accent); padding-bottom: 15px; margin-bottom: 10px; font-size: 2.2em; }
+        .version { text-align: center; color: #64748b; font-weight: bold; margin-bottom: 30px; letter-spacing: 2px; }
+        h2 { background-color: var(--secondary); color: #fff; padding: 12px 20px; border-radius: 6px; margin-top: 40px; font-size: 1.3em; }
+        h3 { color: var(--accent); border-left: 4px solid var(--accent); padding-left: 12px; margin-top: 25px; }
+        
+        pre { background: var(--code-bg); color: #e2e8f0; padding: 15px; border-radius: 8px; overflow-x: auto; font-family: 'Consolas', 'Monaco', monospace; border-left: 5px solid #475569; margin: 15px 0; }
+        code { font-family: 'Consolas', monospace; background: #f1f5f9; color: var(--danger); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+        pre code { background: transparent; color: inherit; padding: 0; }
+        
+        .alert { padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 5px solid; }
+        .alert-info { background-color: #eff6ff; border-color: #3b82f6; color: #1e40af; }
+        .alert-danger { background-color: #fef2f2; border-color: #ef4444; color: #991b1b; }
+        .alert-success { background-color: #f0fdf4; border-color: #22c55e; color: #166534; }
+
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.95em; }
+        th, td { border: 1px solid #e2e8f0; padding: 12px; text-align: left; }
+        th { background-color: #f8fafc; color: var(--secondary); font-weight: bold; }
+        .highlight-row { background-color: #f0f9ff; }
+        
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.8em; font-weight: bold; background: var(--accent); color: white; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>TikTok 顶级自建节点运营全流程手册</h1>
+    <div class="version">FINAL VERSION 1.0</div>
+    
+    <div class="alert alert-info">
+        <strong>核心理念：真实性碾压一切。</strong> 抛弃花哨的加速参数，我们的唯一目标是：让这台服务器在 TikTok 字节跳动的风控雷达上，呈现出 100% 目标国本土真实用户的物理特征、系统指纹和网络行为。
+    </div>
+
+    <!-- 核心变量表 -->
+    <h2>🌐 【核心查询表】多国节点变量配置指南</h2>
+    <p>搭建不同国家的节点时，请在后续步骤中替换对应的 <strong>主机名、时区、Dest/SNI</strong> 参数：</p>
+    <table>
+        <tr>
+            <th>目标国家</th>
+            <th>1. 伪装主机名 (Hostname) 示例</th>
+            <th>2. 系统时区 (Timezone)</th>
+            <th>3. Reality 伪装域名 (Dest / SNI)</th>
+        </tr>
+        <tr>
+            <td><strong>🇩🇪 德国 (DE)</strong></td>
+            <td><code>fra-web-prod</code><br><code>de-app-node01</code><br><code>berlin-gateway</code></td>
+            <td><code>Europe/Berlin</code></td>
+            <td><code>www.yahoo.de</code> (推荐)<br><code>www.t-online.de</code><br><code>www.otto.de</code></td>
+        </tr>
+        <tr class="highlight-row">
+            <td><strong>🇺🇸 美国 (US)</strong></td>
+            <td><code>la-edge-svc</code><br><code>us-web-main</code><br><code>ny-proxy-sys</code></td>
+            <td><code>America/Los_Angeles</code> (美西)<br><code>America/New_York</code> (美东)</td>
+            <td><code>www.yahoo.com</code> (推荐)<br><code>www.microsoft.com</code><br><code>www.apple.com</code></td>
+        </tr>
+        <tr>
+            <td><strong>🇬🇧 英国 (UK)</strong></td>
+            <td><code>lon-gateway-01</code><br><code>uk-app-server</code><br><code>ldn-edge-node</code></td>
+            <td><code>Europe/London</code></td>
+            <td><code>www.bbc.co.uk</code> (推荐)<br><code>www.yahoo.co.uk</code><br><code>www.sky.com</code></td>
+        </tr>
+    </table>
+
+    <h2>第一阶段：服务器底层指纹加固</h2>
+    <p>清除云厂商机房痕迹，消除时区错乱，彻底切断 DNS 泄露源头。</p>
+    <pre><code># 1. 修改主机名 (请从上方表格选取对应的 Hostname)
+sudo hostnamectl set-hostname fra-web-prod
+
+# 2. 同步目标国时区 (请从上方表格选取对应的 Timezone)
+sudo timedatectl set-timezone Europe/Berlin
+
+# 3. 安装英文语言包，统一系统底层语言指纹 (全球服务器通用)
+sudo apt update && sudo apt install -y language-pack-en
+sudo update-locale LANG=en_US.UTF-8
+
+# 4. [防 0 播放终极防御] 强制写入公共 DNS 并锁定，防止云厂商内网劫持
+sudo bash -c 'echo -e "nameserver 8.8.8.8\nnameserver 1.1.1.1" > /etc/resolv.conf'
+sudo chattr +i /etc/resolv.conf</code></pre>
+
+    <h2>第二阶段：网络加速与控制面板部署</h2>
+    <p>开启 BBR 拥塞控制（保障视频上传/滑动流畅度），安装最兼容 Reality 协议的 3x-ui 面板。</p>
+    <pre><code># 1. 开启 BBR 网络加速
+sudo bash -c 'echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf'
+sudo bash -c 'echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf'
+sudo sysctl -p
+
+# 2. 一键安装 3x-ui 面板 (MHSanaei 稳定版)
+curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh | sudo bash</code></pre>
+    <div class="alert alert-danger">
+        <strong>防火墙严正警告：</strong> 严禁在 Linux 系统内开启 <code>ufw</code> 或 <code>iptables</code>！必须在 <strong>云厂商的 WEB 管理页面（安全组/防火墙）</strong> 中放行面板端口（如 TCP 1902）和节点流量端口（如 TCP/UDP 25888）。
+    </div>
+
+    <h2>第三阶段：深度 DNS 防泄露配置 (3x-ui 网页后台)</h2>
+    <p>在面板后台 -> <strong>面板设置</strong> -> <strong>Xray相关设置</strong> 中严格按此配置：</p>
+    <table>
+        <tr><th>配置项</th><th>设定值</th><th>核心逻辑</th></tr>
+        <tr><td><strong>Fake DNS</strong></td><td><strong style="color:red;">坚决关闭 (OFF)</strong></td><td>禁止返回 198.18 虚拟 IP，防止 TikTok 底层 API 嗅探出虚拟代理环境。</td></tr>
+        <tr><td>DNS 列表</td><td><code>8.8.8.8</code>, <code>1.1.1.1</code></td><td>只使用最干净、通用的海外公共 DNS。</td></tr>
+        <tr><td>查询策略</td><td><code>UseIPv4</code></td><td><strong>强制禁用 IPv6 解析</strong>，堵死 IPv6 地址导致的位置直接暴露漏洞。</td></tr>
+        <tr><td>并行查询</td><td>开启 (ON)</td><td>加快真实解析速度，弥补关闭 FakeDNS 带来的极微小首屏延迟。</td></tr>
+    </table>
+    <p><em>* 设置完成后，务必点击底部的“保存”，并在面板设置中点击“重启 Xray 内核”。</em></p>
+
+    <h2>第四阶段：节点 S 级参数设置 (VLESS-REALITY)</h2>
+    <p>在面板的 <strong>入站列表</strong> 中添加节点，参数必须严格一致（打造隐身衣）：</p>
+    <table>
+        <tr><th>参数项</th><th>设定值</th><th>核心逻辑</th></tr>
+        <tr><td>协议</td><td><span class="badge">VLESS</span></td><td>目前封锁率最低、最纯净的底层协议。</td></tr>
+        <tr><td>端口</td><td>建议 <code>443</code> 或 <code>2053</code></td><td>伪装成标准 HTTPS 网页端口，降低 ISP 干扰。</td></tr>
+        <tr><td>安全</td><td><span class="badge">REALITY</span></td><td>借用目标国大厂真实证书，无视 DPI 深度包检测。</td></tr>
+        <tr><td>流控 (Flow)</td><td><code>xtls-rprx-vision</code></td><td><strong>必须开启</strong>，彻底消除 TLS 握手包的长度指纹特征。</td></tr>
+        <tr><td>Dest</td><td><code>www.yahoo.de:443</code> (示例)</td><td><strong>必须加 :443！</strong> 请从上方【核心查询表】中选取对应国家的域名。</td></tr>
+        <tr><td>SNI</td><td><code>www.yahoo.de</code> (示例)</td><td><strong>不加端口！</strong> 必须与 Dest 的域名绝对一致。</td></tr>
+        <tr><td>uTLS</td><td><code>chrome</code></td><td>伪装为全球最常见的谷歌 Chrome 浏览器握手特征。</td></tr>
+        <tr><td>Private Key / Short ID</td><td>点击 <code>生成</code></td><td>生成随机私钥和短 ID，确保节点唯一性。</td></tr>
+        <tr><td>嗅探 (Sniffing)</td><td>全部开启 (勾选)</td><td>开启 QUIC 和 HTTP 嗅探，精准处理 TikTok 专用的音视频流。</td></tr>
+    </table>
+
+    <h2>第五阶段：手机端环境与最终检测 (决定生死)</h2>
+    <div class="alert alert-info">
+        <h3>1. 手机网络客户端设置 (Shadowrocket / v2rayNG)</h3>
+        <ul>
+            <li><strong>全局路由：</strong> 必须设为 <code>代理 (Proxy)</code>。</li>
+            <li><strong>DNS 设置：</strong> 强制设为 <code>远程解析</code>，手动指定为 <code>8.8.8.8</code>。</li>
+            <li><strong>IPv6 设置：</strong> 在软件设置中彻底开启 <code>禁用 IPv6</code>。</li>
+        </ul>
+        
+        <h3>2. 物理与系统环境准备 (TikTok App 打开前)</h3>
+        <ul>
+            <li>必须<strong>拔掉中国电话卡</strong>（或使用目标国废卡）。</li>
+            <li>彻底关闭系统级定位服务 (GPS)。</li>
+            <li><strong>系统语言和时区必须修改为与节点完全一致</strong>（参考核心查询表）。</li>
+        </ul>
+    </div>
+
+    <div class="alert alert-success">
+        <h3>3. 黄金检测标准 (开机必做)</h3>
+        <p>手机连上节点后，打开浏览器访问 👉 <strong>https://ping0.cc</strong>：</p>
+        <ol>
+            <li><strong>IP 位置：</strong> 必须是你购买服务器的城市（德/美/英）。</li>
+            <li><strong>DNS 位置：</strong> <strong>绝对不能出现中国！</strong> 必须显示海外机构（如 Google/Cloudflare/US/DE）。</li>
+            <li><strong>MaxMind 查验：</strong> Connection Type 显示为 <code>Cable/DSL</code> 为极品，ASN Type 是 <code>ISP</code> 其次，<code>is_hosting</code> 必须为 False。</li>
+        </ol>
+        <p><em>🎯 只有以上检测全部绿灯通过，才可以打开 TikTok 进行注册、养号和发布视频！</em></p>
+    </div>
+
+    <div style="text-align: center; margin-top: 50px; color: #64748b; font-size: 0.9em; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+        <p>本手册融汇了 Linux 底层加固、流量加密伪装与大厂风控对抗的最优工程实践。</p>
+        <p><strong>技术决定下限，内容决定上限。祝您在 TikTok 全球赛道爆款频出，顺利变现！</strong></p>
+    </div>
+</div>
+
+</body>
+</html>
