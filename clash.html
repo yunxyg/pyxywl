@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>极客宿主机终极生成器 V8.2 (技术存档版)</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 1100px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { color: #1a73e8; font-size: 24px; margin-top: 0; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        label { font-weight: bold; display: block; margin-bottom: 8px; color: #555; }
+        textarea { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #ccc; border-radius: 5px; font-family: Consolas, monospace; font-size: 13px; resize: vertical; background: #fafafa; }
+        .btn-zone { margin: 20px 0; }
+        .btn { background: #1a73e8; color: white; border: none; padding: 15px 30px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn:hover { background: #1557b0; transform: translateY(-2px); }
+        .btn-copy { background: #34a853; margin-left: 10px; }
+        .btn-copy:hover { background: #2b803e; }
+        .output-box { background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 5px; overflow-x: auto; font-family: Consolas, monospace; font-size: 13px; border: 1px solid #333; line-height: 1.5; min-height: 300px; }
+        #debug-log { margin-top: 15px; padding: 10px; background: #fffde7; border-left: 4px solid #ff9800; font-size: 12px; font-family: monospace; max-height: 150px; overflow-y: auto; }
+        .log-err { color: #d32f2f; font-weight: bold;} .log-ok { color: #2e7d32; font-weight: bold;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🚀 极客宿主机终极配置生成器 (V8.2 备忘存档版)</h1>
+    <p style="color: #666; margin-bottom: 20px;">包含防崩容错机制，并在输出文件中内置了详尽的“空白载体”说明，方便后期调试与 AI 语境对齐。</p>
+    
+    <div class="grid">
+        <div>
+            <label>1. 机场订阅链接 (Proxy-Providers):</label>
+            <textarea id="airport-input" rows="8" placeholder="在此粘贴机场订阅链接，一行一个...&#10;（若不填，动态组自动屏蔽防报错）"></textarea>
+        </div>
+        <div>
+            <label>2. 静态固定 IP 节点 (Proxies):</label>
+            <textarea id="static-input" rows="8" placeholder="在此粘贴 Trojan/Vmess/SS/Socks 链接...&#10;（若不填，机场直连更新，118x 静态端口隐藏）"></textarea>
+        </div>
+    </div>
+    
+    <div class="btn-zone">
+        <button class="btn" onclick="buildFinalConfig()">⚡ 生成终极 YAML 配置文件</button>
+        <button class="btn btn-copy" onclick="copyConfig()">📋 复制完整 YAML</button>
+    </div>
+    
+    <div id="debug-log">日志：等待指令...</div>
+    
+    <h3 style="margin-top: 20px; color: #1a73e8;">最终输出 (内含技术备忘说明):</h3>
+    <pre id="output" class="output-box">等待生成...</pre>
+</div>
+
+<script>
+// --- V4.1 Base64 解码引擎 ---
+function smartB64(str) {
+    try {
+        str = str.replace(/-/g, '+').replace(/_/g, '/').replace(/[^A-Za-z0-9+/=]/g, '');
+        while (str.length % 4) str += '=';
+        let bin = atob(str);
+        try { return decodeURIComponent(bin.split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')); } 
+        catch(e) { return decodeURIComponent(escape(bin)); }
+    } catch(e) { return str; }
+}
+
+// --- 静态节点提取 ---
+function parseStatic(line, index) {
+    line = line.trim();
+    if (!line || !line.includes('://')) return null;
+    try {
+        if (line.startsWith('trojan://')) {
+            const url = new URL(line);
+            return { name: `STATIC-US-${index}-${decodeURIComponent(url.hash.substring(1)) || 'Node'}`, type: 'trojan', server: url.hostname, port: url.port, password: url.username, sni: new URLSearchParams(url.search).get('sni') || url.hostname, udp: true, 'skip-cert-verify': true };
+        }
+        if (line.startsWith('vmess://')) {
+            const config = JSON.parse(smartB64(line.substring(8)));
+            return { name: `STATIC-US-${index}-${config.ps || 'Node'}`, type: 'vmess', server: config.add, port: config.port, uuid: config.id, alterId: 0, cipher: 'auto', tls: config.tls === 'tls', udp: true, 'skip-cert-verify': true };
+        }
+    } catch(e) { return null; }
+}
+
+function buildFinalConfig() {
+    const airportLines = document.getElementById('airport-input').value.split('\n').filter(l => l.trim());
+    const staticLines = document.getElementById('static-input').value.split('\n').filter(l => l.trim());
+    const log = document.getElementById('debug-log');
+    
+    // 全空拦截
+    if (airportLines.length === 0 && staticLines.length === 0) {
+        log.innerHTML = `<span class="log-err">❌ 错误：机场订阅和静态节点不能同时为空！</span>`;
+        document.getElementById('output').innerText = "等待生成..."; return;
+    }
+
+    // 1. 处理静态节点
+    let staticProxies =[];
+    staticLines.forEach((line, i) => {
+        let p = parseStatic(line, i + 1);
+        if (p) staticProxies.push(p);
+    });
+
+    // 2. 处理机场列表
+    let airportIds =[];
+    let providersYaml = "";
+    if (airportLines.length > 0) {
+        providersYaml += `proxy-providers:\n`;
+        airportLines.forEach((url, i) => {
+            let id = `airport_${i + 1}`;
+            airportIds.push(id);
+            providersYaml += `  ${id}:\n    type: http\n    url: "${url.trim()}"\n    path: "./${id}.yaml"\n    interval: 3600\n`;
+            if (staticProxies.length > 0) {
+                providersYaml += `    proxy: "${staticProxies[0].name}"\n`;
+            }
+            providersYaml += `    health-check: { enable: true, url: "https://www.youtube.com/generate_204", interval: 60, timeout: 2000, lazy: false }\n`;
+        });
+    }
+
+    // 3. 构建全参数无损 YAML (加入技术存档说明)
+    let yaml = `# =====================================================================
+# 🚀 极客宿主机终极配置文件 V8.2 (全参数无损版)
+#
+# 【技术备忘录 / AI 语境同步说明】
+# 1. 本配置为一键导入版 YAML。在 Clash Verge 中新建 Local 配置并粘贴即可使用。
+# 2. 如果你未来使用 "JavaScript 全局扩展脚本" 来修改其他订阅：
+#    - 脚本开头必须保留 config["proxies"] =[]; 等清空代码，防止旧节点残留。
+#    - 必须在订阅列表新建一个如下的“空载体(Local)”并点击“使用”，防止脚本崩溃：
+# ---------------------------------------------------------------------
+# mode: rule
+# proxies: []
+# proxy-groups:[]
+# rules: 
+#   - MATCH,DIRECT
+# ---------------------------------------------------------------------
+# =====================================================================\n\n`;
+
+    // 内核顶级调优
+    yaml += `tcp-concurrent: true\nunified-delay: true\nipv6: false\nallow-lan: true\nbind-address: "*"\nmode: rule\nlog-level: info\n\n`;
+
+    // DNS 模块
+    yaml += `dns:\n  enable: true\n  ipv6: false\n  enhanced-mode: fake-ip\n  fake-ip-range: 198.18.0.1/16\n  listen: 0.0.0.0:53\n`;
+    yaml += `  fake-ip-filter:\n    - '*.lan'\n    - '*.local'\n    - '*.arpa'\n    - 'time.*.com'\n    - 'ntp.*.com'\n    - '+.market.xiaomi.com'\n    - 'localhost.ptlogin2.qq.com'\n    - '*.msftncsi.com'\n    - 'www.msftconnecttest.com'\n`;
+    yaml += `  default-nameserver:[223.5.5.5, 119.29.29.29, 8.8.8.8]\n`;
+    yaml += `  nameserver:[https://doh.pub/dns-query, https://dns.alidns.com/dns-query, https://dns.google/dns-query]\n`;
+    yaml += `  fallback:[https://1.1.1.1/dns-query, 8.8.8.8]\n  fallback-filter: { geoip: true, geoip-code: "CN" }\n\n`;
+
+    // 处理 Proxies 列表
+    if (staticProxies.length > 0) {
+        yaml += `proxies:\n`;
+        staticProxies.forEach(p => {
+            yaml += `  - name: "${p.name}"\n`;
+            for (let [k, v] of Object.entries(p)) {
+                if (k === 'name') continue;
+                yaml += `    ${k}: ${v}\n`;
+            }
+        });
+        yaml += `\n`;
+    } else {
+        yaml += `proxies:[]\n\n`;
+    }
+
+    // 载入 Providers
+    yaml += providersYaml + (airportIds.length > 0 ? `\n` : ``);
+
+    // 策略组
+    yaml += `proxy-groups:\n`;
+    let useStr = airportIds.length > 0 ? `\n    use: ${JSON.stringify(airportIds)}` : "";
+    let fallBackStr = airportIds.length > 0 ? "" : `\n    proxies: ["DIRECT"]`;
+    let filterUS = airportIds.length > 0 ? `\n    filter: "US|美国|States"` : "";
+    let filterJP = airportIds.length > 0 ? `\n    filter: "JP|日本|Japan"` : "";
+    let filterMix = airportIds.length > 0 ? `\n    filter: "US|美国|JP|日本"` : "";
+
+    yaml += `  - name: "🇺🇸-多机场聚合-美国最快"\n    type: url-test\n    strategy: consistent-hashing\n    url: "https://www.youtube.com/generate_204"\n    interval: 30\n    tolerance: 80${useStr}${fallBackStr}${filterUS}\n\n`;
+    yaml += `  - name: "🇯🇵-多机场聚合-日本最快"\n    type: url-test\n    strategy: consistent-hashing\n    url: "https://www.youtube.com/generate_204"\n    interval: 30\n    tolerance: 80${useStr}${fallBackStr}${filterJP}\n\n`;
+    yaml += `  - name: "🚀-多机场大聚合-下载叠加"\n    type: load-balance\n    strategy: round-robin\n    url: "https://www.youtube.com/generate_204"\n    interval: 60${useStr}${fallBackStr}${filterMix}\n\n`;
+
+    // 监听器
+    yaml += `listeners:\n`;
+    yaml += `  - { name: L1081, type: mixed, port: 1081, listen: "0.0.0.0", proxy: "🇺🇸-多机场聚合-美国最快" }\n`;
+    yaml += `  - { name: L1082, type: mixed, port: 1082, listen: "0.0.0.0", proxy: "🇯🇵-多机场聚合-日本最快" }\n`;
+    yaml += `  - { name: L1083, type: mixed, port: 1083, listen: "0.0.0.0", proxy: "🚀-多机场大聚合-下载叠加" }\n`;
+    
+    if (staticProxies.length > 0) {
+        staticProxies.forEach((p, idx) => {
+            yaml += `  - { name: LS_${idx}, type: mixed, port: ${1181 + idx}, listen: "0.0.0.0", proxy: "${p.name}" }\n`;
+        });
+    }
+
+    // 规则
+    yaml += `\nrules:\n  - MATCH,🇺🇸-多机场聚合-美国最快\n`;
+
+    document.getElementById('output').innerText = yaml;
+    log.innerHTML = `<span class="log-ok">✅ 解析成功！输出代码包含完整的技术备忘录，方便后期存档学习。</span>`;
+}
+
+function copyConfig() {
+    const text = document.getElementById('output').innerText;
+    if(text.includes("等待生成")) { alert("请先点击生成！"); return; }
+    navigator.clipboard.writeText(text).then(() => alert("✅ 完整 YAML 已复制！"));
+}
+</script>
+</body>
+</html>
